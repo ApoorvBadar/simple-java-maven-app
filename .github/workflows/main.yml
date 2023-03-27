@@ -1,19 +1,53 @@
-name: Java CI with Maven
+name: Build and deploy
 
-on: [push,pull_request]
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
-
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
-        with:
-          java-version: '8'
-          distribution: 'temurin'
-          cache: maven
-      - name: Build with Maven
-        run: mvn --batch-mode --update-snapshots package
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Install Java and Maven
+      uses: actions/setup-java@v2
+      with:
+        java-version: '11'
+        maven-version: '3.8.3'
+
+    - name: Build and package with Maven
+      run: mvn package
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: myapp-deb
+        path: target/*.deb
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: myapp-deb
+
+    - name: Install SSH key
+      uses: webfactory/ssh-agent@v0.5.0
+      with:
+        ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+    - name: Deploy artifact
+      run: |
+        ssh $DEPLOY_USER@$DEPLOY_SERVER "sudo apt-get update && sudo apt-get install -y ./myapp*.deb"
